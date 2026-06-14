@@ -8,10 +8,10 @@
 extern "C" {
 #endif
 
-#define ANNEX_HAL_UART_IRQ_RX_READY   (1u << 0)
-#define ANNEX_HAL_UART_IRQ_TX_EMPTY   (1u << 1)
-#define ANNEX_HAL_UART_IRQ_RX_OVERRUN (1u << 2)
-#define ANNEX_HAL_UART_IRQ_FRAME_ERR  (1u << 3)
+#define ANNEX_HAL_UART_IRQ_RX_READY   (1U << 0)
+#define ANNEX_HAL_UART_IRQ_TX_EMPTY   (1U << 1)
+#define ANNEX_HAL_UART_IRQ_RX_OVERRUN (1U << 2)
+#define ANNEX_HAL_UART_IRQ_FRAME_ERR  (1U << 3)
 
 typedef struct annex_hal_uart_dev annex_hal_uart_dev_t;
 
@@ -24,8 +24,8 @@ typedef struct {
 } annex_hal_uart_config_t;
 
 typedef struct {
-    uintptr_t  base_addr;     /* MMIO base                               */
-    uint32_t   input_clk_hz;  /* Peripheral input clock     for baud calculation */
+    uintptr_t  base_addr;     /* MMIO base                                   */
+    uint32_t   input_clk_hz;  /* Peripheral input clock for baud calculation */
     int8_t     tx_pin;        /* Board-level pin number (-1 = unused)        */
     int8_t     rx_pin;        /* Board-level pin number (-1 = unused)        */
     void      *platform_data; /* Anything else (optional)                    */

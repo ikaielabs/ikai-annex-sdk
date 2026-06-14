@@ -22,23 +22,33 @@ extern "C" {
 #define ANNEX_LIN_WAKEUP_FRAME 4 /* A wake up frame was received. */
 
 enum annex_lin_status {
-    linOK = 0,
-    linERR = -1
+    LIN_OK = 0,
+    LIN_ERR = -1,
+    LIN_NOT_INITIALIZED = -2
 };
 
 typedef struct {
-    void *platform_data; /* Anything else (optional)                    */
+    uint32_t lin_baudrate;
+    uint8_t break_width;
+    uint8_t flags;
+} annex_lin_config_t;
+
+typedef struct {
+    uintptr_t base_addr;     /* Peripheral base addr                        */
+    uint32_t input_clk_hz;   /* Peripheral input clock for baud calculation */
+    void *platform_data;     /* Anything else (optional)                    */
 } annex_lin_hw_desc_t;
 
 typedef struct annex_lin_dev annex_lin_dev_t;
 
 annex_lin_dev_t *annex_lin_open (const annex_lin_hw_desc_t *hw);
 void annex_lin_close(annex_lin_dev_t *dev);
-annex_lin_status annex_lin_set_bitrate(annex_lin_dev_t *dev, uint32_t bps);
+annex_lin_status annex_lin_config(annex_lin_dev_t *dev, annex_lin_config_t cfg);
 annex_lin_status annex_lin_write_message(annex_lin_dev_t *dev, uint32_t id, void *msg, uint32_t dlc);
 annex_lin_status annex_lin_request_message(annex_lin_dev_t *dev, uint32_t id);
 annex_lin_status annex_lin_read_message(annex_lin_dev_t *dev, uint32_t *id, void *msg, uint32_t *dlc, uint32_t *flags);
-annex_lin_status annex_lin_read_message_wait(annex_lin_dev_t *dev, uint32_t *id, void *msg, uint32_t *dlc, uint32_t *flags, uint32_t timeout)
+annex_lin_status annex_lin_read_message_wait(annex_lin_dev_t *dev, uint32_t *id, void *msg, uint32_t *dlc, uint32_t *flags, uint32_t timeout);
+
 #ifdef __cplusplus
 }
 #endif

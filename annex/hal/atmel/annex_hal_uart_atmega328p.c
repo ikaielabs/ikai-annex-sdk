@@ -22,7 +22,7 @@ annex_hal_uart_dev_t *annex_hal_uart_open(const annex_hal_uart_hw_desc_t *hw)
 
     annex_hal_uart_dev_t *dev = (annex_hal_uart_dev_t *)calloc(1, sizeof(*dev));
     if (!dev) return NULL;
-
+    
     uintptr_t base   = hw->base_addr;
     dev->ucsra = (volatile uint8_t  *)(base + 0);
     dev->ucsrb = (volatile uint8_t  *)(base + 1);
@@ -53,9 +53,17 @@ int annex_hal_uart_start(annex_hal_uart_dev_t *dev, bool tx_enable, bool rx_enab
 {
     if (!dev) return -1;
 
-    // Baud rate
-    uint16_t ubrr_val = (uint16_t)(dev->input_clk_hz
-                                   / 16 / dev->cfg.baud_rate - 1);
+    // Calculate value for baud rate
+
+    *dev->ucsra = (1 << U2X0);
+
+    uint16_t ubrr_val =
+    (dev->input_clk_hz / (8UL * dev->cfg.baud_rate)) - 1;
+
+    // if(dev->cfg.baud_rate > (dev->input_clk_hz / 16U))
+    //     dev->cfg.baud_rate = (dev->input_clk_hz / 16U);
+    
+    // uint16_t ubrr_val = (uint16_t)((((dev->input_clk_hz) / dev->cfg.baud_rate) - 8U) / 16U);
     *dev->ubrr = ubrr_val;
 
     // Frame format — 8N1
@@ -65,7 +73,7 @@ int annex_hal_uart_start(annex_hal_uart_dev_t *dev, bool tx_enable, bool rx_enab
     uint8_t ucsrb = 0;
     if (tx_enable) ucsrb |= (1 << TXEN0);
     if (rx_enable) ucsrb |= (1 << RXEN0);
-    *dev->ucsrb = ucsrb;
+    *dev->ucsrb |= ucsrb;
 
     return 0;
 }

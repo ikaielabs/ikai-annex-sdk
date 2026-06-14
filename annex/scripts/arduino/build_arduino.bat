@@ -65,7 +65,7 @@ set SKETCH=..\..\samples\uart\uart_echo\uart_echo.ino
 :: set LIB_FLAGS=
 :: set LIB_FLAGS=%LIB_FLAGS% --libraries .
 :: set LIB_FLAGS=%LIB_FLAGS% --libraries .\third_party
-set LIB_FLAGS=--libraries %SDK_ROOT%\hal\arduino
+:: set LIB_FLAGS=--libraries %SDK_ROOT%\hal\arduino
 
 
 :: ------------------------------------------------------------
@@ -74,8 +74,8 @@ set LIB_FLAGS=--libraries %SDK_ROOT%\hal\arduino
 ::  Space-separate multiple paths inside the quotes
 :: ------------------------------------------------------------
 
-set EXTRA_C_FLAGS=-I%SDK_ROOT%\include\annex\hal
-set EXTRA_CPP_FLAGS=-I%SDK_ROOT%\include\annex\hal
+set EXTRA_C_FLAGS=-I%SDK_ROOT%\include\annex\hal -I%SDK_ROOT%\utility
+set EXTRA_CPP_FLAGS=-I%SDK_ROOT%\include\annex\hal -I%SDK_ROOT%\utility
 
 :: Add more includes as needed:
 :: set EXTRA_C_FLAGS=%EXTRA_C_FLAGS% -I.\platform\avr
