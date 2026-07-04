@@ -53,7 +53,7 @@ public:
      * @param tx_pin Pin used for LIN TX (for break signal generation)
      * @param break_width Break width in bit times (13-15 bits typical)
      */
-    LINAnnex(HardwareSerial &serial, uint8_t tx_pin, uint8_t break_width = 13);
+    LINAnnex(HardwareSerial &serial, uint8_t tx_pin, uint8_t rx_pin, uint8_t break_width = 13);
 
     /**
      * @brief Initialize the LIN driver for master mode
@@ -93,21 +93,13 @@ public:
     uint16_t requestMessage(uint8_t id);
 
     /**
-     * @brief Read a received LIN message
-     * For master: reads response to previous request
-     * For slave: reads command header and prepares response
-     * @param msg Pointer to LIN_Message structure to store result
-     * @return LIN_OK on success, error code otherwise
-     */
-    uint16_t readMessage(LIN_Message *msg);
-
-    /**
      * @brief Read a LIN message with timeout (blocking)
      * @param msg Pointer to LIN_Message structure to store result
+     * @param dlc Data length. Valid values [1..8]. 
      * @param timeout_ms Timeout in milliseconds (0 = no wait)
      * @return LIN_OK on success, error code otherwise
      */
-    uint16_t readMessageWait(LIN_Message *msg, uint32_t timeout_ms);
+    uint16_t readMessageWait(LIN_Message *msg, uint8_t dlc, uint32_t timeout_ms);
 
     /**
      * @brief Send a response message (slave only)
@@ -156,12 +148,15 @@ public:
 private:
     HardwareSerial &_serial;
     uint8_t _tx_pin;
+    uint8_t _rx_pin;
     uint8_t _break_width;
     uint32_t _baudrate;
     uint16_t _flags;
     uint16_t _last_status;
     uint8_t _last_request_id;
     bool _initialized;
+    bool _break_detected;
+    // volatile uint32_t _fall_time_us;
 
     // LIN Protocol helper functions
     uint8_t computeProtectedId(uint8_t id);
@@ -170,9 +165,12 @@ private:
     
     // Communication helpers
     void sendBreak();
+    void detectBreak();
+    // void pinISR();
+    // void handlePinChange();
     uint16_t sendHeader(uint8_t id);
     uint16_t readBytes(uint8_t *buffer, uint8_t length, uint32_t timeout_ms);
-    uint16_t readResponse(LIN_Message *msg, uint32_t timeout_ms);
+    uint16_t readResponse(LIN_Message *msg, uint8_t dlc, uint32_t timeout_ms);
     uint16_t readHeader(LIN_Message *msg, uint32_t timeout_ms);
     
     // Timing helper

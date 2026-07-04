@@ -17,7 +17,7 @@
 #include <LinAnnex.h>
 
 // Create LIN master instance with Serial, tx pin 1, break width 13 bits
-LINAnnex lin(Serial, 1, 13);
+LINAnnex lin(Serial, 1, 0, 13);
 
 // Message IDs used in this example
 #define MSG_COMMAND     0x17U  // Master sends commands

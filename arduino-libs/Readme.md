@@ -109,7 +109,7 @@ Script location: `scripts\ikai_annex_run.bat`
 By default it **builds and flashes**. Add `--build-only` to just compile.
 
 ```bat
-annex_flash.bat [clean] --annex-board <name> --example <name> ^
+ikai_annex_run.bat [clean] --annex-board <name> --example <name> ^
                  [--arduino-board <board>] [--com <port>] [--build-only]
 ```
 
@@ -142,16 +142,16 @@ You can also pass a full FQBN directly (anything containing `:`), e.g.
 
 ```bat
 :: Build + flash LinAnnex's lin_master_example to an Uno on COM3
-annex_flash.bat --annex-board LinAnnex --example lin_master_example --com COM3
+ikai_annex_run.bat --annex-board LinAnnex --example lin_master_example --com COM3
 
 :: Build + flash AdcAnnex's adc_annex example to a Mega on COM5
-annex_flash.bat --annex-board AdcAnnex --example adc_annex --arduino-board mega --com COM5
+ikai_annex_run.bat --annex-board AdcAnnex --example adc_annex --arduino-board mega --com COM5
 
 :: Just compile, don't flash (e.g. CI / sanity check)
-annex_flash.bat --annex-board LinAnnex --example lin_master_example --build-only
+ikai_annex_run.bat --annex-board LinAnnex --example lin_master_example --build-only
 
 :: Clean build output for a given board/example combo
-annex_flash.bat clean --annex-board LinAnnex --example lin_master_example
+ikai_annex_run.bat clean --annex-board LinAnnex --example lin_master_example
 ```
 
 Build output for each board/FQBN combination goes to:
