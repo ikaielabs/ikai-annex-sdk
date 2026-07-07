@@ -11,19 +11,19 @@ The SDK is split into three layers so that annex driver logic never depends
 directly on a specific MCU vendor:
 
 ```
-samples  →  drivers (annex/) ──depends on──▶ include/annex/hal/*.h
-                                                     ▲
-                                                     │ implemented by
-                                                     │
+samples  →  drivers (annex/) ──depends on──▶ include/hal/*.h
+                                                  ▲
+                                                  │ implemented by
+                                                  │
                                           hal/<vendor>/*.c  (stm32, nxp, template)
 ```
 
-- **`include/annex/`** — public API. `hal/` contains the vendor-neutral HAL
+- **`include/`** — public API. `hal/` contains the vendor-neutral HAL
   interface (`gpio.h`, `uart.h`, `spi.h`, `i2c.h`, `pwm.h`, `adc.h`); the
   top-level headers (`lin.h`, `can.h`, `temp_sensor.h`) are the annex module
   APIs that applications and samples include.
 - **`drivers/`** — annex board driver implementations (protocol/module logic),
-  written only against `include/annex/hal/*.h`, never against vendor SDKs
+  written only against `include/hal/*.h`, never against vendor SDKs
   directly.
 - **`hal/`** — per-vendor implementations of the HAL interface
   (`stm32/`, `nxp/`). `hal/template/` is a skeleton to copy when porting to a
@@ -57,7 +57,9 @@ mcu-sdk
 │   └── template/                 Copy this to port a new MCU family
 ├── samples/
 │   ├── lin_annex/
-│   │   └── main.c
+│   │   └── STM32F446RE-Nucleo
+│   │       ├── STM32CubeIDE      This is STM32CubeIDE project for the sample application
+│   │       └── Readme.md
 │   └── <module>_annex/
 │       └── main.c
 └── utility/                      printf/timer and other shared helpers

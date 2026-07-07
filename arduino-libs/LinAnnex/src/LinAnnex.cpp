@@ -1,11 +1,70 @@
 #include "LinAnnex.h"
 #include <Arduino.h>
 
+#if defined(ARDUINO_ARCH_AVR)
+#include <avr/interrupt.h>
+#endif
+
 // LIN Protocol constants
 #define LIN_SYNC_BYTE       0x55
 #define LIN_MAX_FRAME_ID    0x3F
 #define LIN_MAX_DATA_LEN    8
 #define LIN_MIN_TIMEOUT_MS  1
+
+// #if defined(ARDUINO_ARCH_AVR)
+// namespace {
+//     static volatile uint8_t g_lin_rx_buffer[64];
+//     static volatile uint8_t g_lin_rx_head = 0;
+//     static volatile uint8_t g_lin_rx_tail = 0;
+//     static volatile bool g_lin_rx_overflow = false;
+
+//     inline void linRxBufferClear() {
+//         g_lin_rx_head = 0;
+//         g_lin_rx_tail = 0;
+//         g_lin_rx_overflow = false;
+//     }
+
+//     inline uint8_t linRxBufferCount() {
+//         return (uint8_t)(g_lin_rx_head - g_lin_rx_tail);
+//     }
+
+//     inline void linRxBufferPush(uint8_t value) {
+//         uint8_t next_head = (uint8_t)(g_lin_rx_head + 1U);
+//         if (next_head >= sizeof(g_lin_rx_buffer)) {
+//             next_head = 0;
+//         }
+//         if (next_head == g_lin_rx_tail) {
+//             g_lin_rx_overflow = true;
+//             return;
+//         }
+//         g_lin_rx_buffer[g_lin_rx_head] = value;
+//         g_lin_rx_head = next_head;
+//     }
+
+//     inline uint8_t linRxBufferPop() {
+//         if (g_lin_rx_head == g_lin_rx_tail) {
+//             return 0;
+//         }
+//         uint8_t value = g_lin_rx_buffer[g_lin_rx_tail];
+//         g_lin_rx_tail = (uint8_t)(g_lin_rx_tail + 1U);
+//         if (g_lin_rx_tail >= sizeof(g_lin_rx_buffer)) {
+//             g_lin_rx_tail = 0;
+//         }
+//         return value;
+//     }
+// }
+
+// ISR(USART_RX_vect) {
+//     linRxBufferPush(UDR0);
+// }
+// #else
+// namespace {
+//     inline void linRxBufferClear() {}
+//     inline uint8_t linRxBufferCount() { return 0; }
+//     inline void linRxBufferPush(uint8_t) {}
+//     inline uint8_t linRxBufferPop() { return 0; }
+// }
+// #endif
 
 /**
  * @brief Constructor - Initialize LINAnnex object
@@ -13,15 +72,17 @@
  * @param tx_pin TX pin for break generation
  * @param break_width Break width in bit times (13-15 typical)
  */
-LINAnnex::LINAnnex(HardwareSerial &serial, uint8_t tx_pin, uint8_t break_width)
+LINAnnex::LINAnnex(HardwareSerial &serial, uint8_t tx_pin, uint8_t rx_pin, uint8_t break_width)
     : _serial(serial),
       _tx_pin(tx_pin),
+      _rx_pin(rx_pin),
       _break_width(break_width),
       _baudrate(9600),
       _flags(0),
       _last_status(LIN_OK),
       _last_request_id(0),
-      _initialized(false) {
+      _initialized(false),
+      _break_detected(false) {
 }
 
 /**
@@ -119,6 +180,43 @@ void LINAnnex::sendBreak() {
 }
 
 /**
+ * @brief Detect LIN break signal
+ * Monitor RX pin for break detection, then releases
+ */
+void LINAnnex::detectBreak() {
+    // Calculate break duration in microseconds
+    // Break = 13 bits at specified baudrate
+    uint32_t break_us = (uint32_t)(((_break_width * 1000000UL) / _baudrate) + 1);
+    
+    // Flush any pending data
+    _serial.flush();
+
+    // End Serial communication 
+    _serial.end();
+
+    while (!_break_detected) {
+
+        // GPIO to take control of TX pin to generate break condition.
+        // Set TX pin as output and pull low for break
+        pinMode(_rx_pin, INPUT);
+
+        while(digitalRead(_rx_pin) == HIGH);
+
+        uint32_t start = micros();
+        
+        while(digitalRead(_rx_pin) == LOW);
+
+        // uint32_t low_duration_us = (micros() - start);
+        // if((low_duration_us - 100) >= break_us)
+        _break_detected = true;
+
+    }
+    
+    // Let UART take over RX line, Start/Restart the UART
+    _serial.begin(_baudrate);
+}
+
+/**
  * @brief Send LIN frame header (sync byte + protected ID)
  */
 uint16_t LINAnnex::sendHeader(uint8_t id) {
@@ -148,12 +246,13 @@ uint16_t LINAnnex::readBytes(uint8_t *buffer, uint8_t length, uint32_t timeout_m
     uint8_t received = 0;
 
     while (received < length) {
-        if (_serial.available()) {
-            buffer[received++] = _serial.read();
+        int c = _serial.read();
+        if (c >= 0) {
+            buffer[received++] = (uint8_t)c;
+            start = millis();      // reset timeout on each successful byte (see note below)
             continue;
         }
 
-        // Check timeout
         if (timeout_ms > 0 && (millis() - start) >= timeout_ms) {
             _last_status |= LIN_TIMEOUT;
             break;
@@ -162,6 +261,9 @@ uint16_t LINAnnex::readBytes(uint8_t *buffer, uint8_t length, uint32_t timeout_m
 
     if (received == 0) {
         return (_last_status = LIN_TIMEOUT);
+    }
+    if (received < length) {
+        return (_last_status = LIN_TIMEOUT); // partial frame
     }
 
     return (_last_status = LIN_OK);
@@ -208,32 +310,26 @@ uint16_t LINAnnex::readHeader(LIN_Message *msg, uint32_t timeout_ms) {
     msg->length = 0;
     msg->status = LIN_NO_DATA;
     _last_request_id = raw_id;
-
     return (_last_status = LIN_OK);
 }
 
 /**
  * @brief Read LIN response (data + checksum)
  */
-uint16_t LINAnnex::readResponse(LIN_Message *msg, uint32_t timeout_ms) {
+uint16_t LINAnnex::readResponse(LIN_Message *msg, uint8_t dlc, uint32_t timeout_ms) {
     if (!msg) {
         return (_last_status = LIN_ERROR);
     }
 
     uint8_t buffer[9] = {0};
     uint32_t received = 0;
-
-    // Try to read up to 9 bytes (8 data + 1 checksum)
+    uint8_t total_len = dlc + 1U;
+    
+    // Read (dlc + 1 (checksum)) byte
     uint32_t start = millis();
-    while (received < sizeof(buffer)) {
-        if (_serial.available()) {
-            buffer[received++] = _serial.read();
+    while (received < total_len) {
+        if (readBytes(&(buffer[received++]), 1, 10) != LIN_OK) {
             continue;
-        }
-
-        if (received >= 2) {
-            // Have at least data + checksum, okay to proceed
-            break;
         }
 
         if (timeout_ms > 0 && (millis() - start) >= timeout_ms) {
@@ -241,8 +337,11 @@ uint16_t LINAnnex::readResponse(LIN_Message *msg, uint32_t timeout_ms) {
         }
     }
 
+    digitalWrite(10, LOW);
+
     if (received < 2) {
-        return (_last_status = LIN_ERROR);
+        msg->status = LIN_NO_DATA;
+        return (_last_status = LIN_NO_DATA);
     }
 
     // Extract data length (last byte is checksum)
@@ -253,7 +352,8 @@ uint16_t LINAnnex::readResponse(LIN_Message *msg, uint32_t timeout_ms) {
 
     // Verify checksum
     uint8_t checksum = buffer[received - 1];
-    uint8_t expected = computeChecksum(_last_request_id, buffer, data_len, 
+    uint8_t frame_id = (msg->id != 0) ? msg->id : _last_request_id;
+    uint8_t expected = computeChecksum(frame_id, buffer, data_len,
                                        (_flags & LIN_ENHANCED_CHECKSUM) != 0);
     
     if (checksum != expected) {
@@ -263,7 +363,7 @@ uint16_t LINAnnex::readResponse(LIN_Message *msg, uint32_t timeout_ms) {
 
     // Copy data
     memcpy(msg->data, buffer, data_len);
-    msg->id = _last_request_id;
+    msg->id = frame_id;
     msg->length = data_len;
     msg->checksum = checksum;
     msg->status = LIN_OK;
@@ -404,16 +504,9 @@ uint16_t LINAnnex::sendResponse(const uint8_t *data, uint8_t length) {
 }
 
 /**
- * @brief Read a LIN message (no timeout)
- */
-uint16_t LINAnnex::readMessage(LIN_Message *msg) {
-    return readMessageWait(msg, 0);
-}
-
-/**
  * @brief Read a LIN message with timeout
  */
-uint16_t LINAnnex::readMessageWait(LIN_Message *msg, uint32_t timeout_ms) {
+uint16_t LINAnnex::readMessageWait(LIN_Message *msg, uint8_t dlc, uint32_t timeout_ms) {
     if (!_initialized || !msg) {
         return (_last_status = LIN_NOT_INITIALIZED);
     }
@@ -422,13 +515,16 @@ uint16_t LINAnnex::readMessageWait(LIN_Message *msg, uint32_t timeout_ms) {
 
     if (_flags & LIN_MASTER) {
         // Master reads response to previous request
-        return readResponse(msg, timeout_ms);
+        return readResponse(msg, dlc, timeout_ms);
     } else if (_flags & LIN_SLAVE) {
-        // Slave reads command header
+
+        detectBreak();
+
+        // Slave reads command header and the following data payload
         if (readHeader(msg, timeout_ms) != LIN_OK) {
             return _last_status;
         }
-        return (_last_status = LIN_OK);
+        return readResponse(msg, dlc, timeout_ms);
     }
 
     return (_last_status = LIN_ERROR);
@@ -463,14 +559,4 @@ void LINAnnex::setEnhancedChecksum(bool enable) {
  */
 void LINAnnex::flushBuffers() {
     _serial.flush();
-    while (_serial.available()) {
-        _serial.read();
-    }
-}
-
-/**
- * @brief Check available data
- */
-int LINAnnex::available() const {
-    return _serial.available();
 }
