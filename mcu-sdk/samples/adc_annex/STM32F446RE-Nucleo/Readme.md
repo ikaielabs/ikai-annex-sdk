@@ -8,20 +8,20 @@ STM32F446RE uses SPI2.
 
 | STM32F446RE Pin | ADC Annex Pin | Description |
 |-----------------|---------------|-------------|
-| PB9             | CS            | SPI Chip Select |
-| PB10            | SCK           | SPI Clock |
-| PC1             | SDI           | SPI Master Out, Slave In (MOSI) |
-| PC2             | SDO           | SPI Master In, Slave Out (MISO) |
+| PB6             | CS            | SPI Chip Select |
+| PA5             | SCK           | SPI Clock |
+| PA7             | SDI           | SPI Master Out, Slave In (MOSI) |
+| PA6             | SDO           | SPI Master In, Slave Out (MISO) |
 
 ## Connection Diagram
 
 ```text
     STM32F446RE                 ADC Annex
     ------------                ----------
-    PB9     ----------------->  CS
-    PB10    ----------------->  SCK
-    PC1     ----------------->  SDI
-    PC2     <-----------------  SDO
+    PB6     ----------------->  CS
+    PA5     ----------------->  SCK
+    PA7     ----------------->  SDI
+    PA6     <-----------------  SDO
 ```
 
 ## Notes
