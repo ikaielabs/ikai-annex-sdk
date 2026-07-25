@@ -11,6 +11,9 @@
  */
 
 #include <LinAnnex.h>
+#include <SoftwareSerial.h>
+
+SoftwareSerial linAnnexSerial(10, 11); // RX, TX -> For prints
 
 // Create LIN slave instance with Serial, tx pin 1, break width 13 bits
 LINAnnex lin(Serial, 1, 0, 13);
@@ -22,17 +25,13 @@ LINAnnex lin(Serial, 1, 0, 13);
 static const uint8_t expected_data[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
 
 void setup() {
-    pinMode(LED_BUILTIN, OUTPUT);
-    pinMode(10, OUTPUT);
 
+    linAnnexSerial.begin(115200);
+
+    linAnnexSerial.println("Lin Responder Start");
     uint16_t status = lin.beginSlave(10000);
     if (status != LIN_OK) {
-        while (1) {
-            digitalWrite(LED_BUILTIN, HIGH);
-            delay(100);
-            digitalWrite(LED_BUILTIN, LOW);
-            delay(100);
-        }
+        linAnnexSerial.println("Lin Init Failed");
     }
 
     lin.setEnhancedChecksum(false);
@@ -51,6 +50,18 @@ void loop() {
             }
         }
 
-        digitalWrite(LED_BUILTIN, match ? HIGH : LOW);
+        linAnnexSerial.print("Received Data: ");
+        for (uint8_t i = 0; i < msg.length; i++) {
+            linAnnexSerial.print(msg.data[i], HEX); // Print the number without starting a new line
+            if (i < msg.length - 1) {
+                linAnnexSerial.print(", ");
+            }
+        }
+        linAnnexSerial.println();
+        if(match) {
+            linAnnexSerial.println("Received Data Matched: OK");
+        } else {
+            linAnnexSerial.println("Received Data not Matched: FAIL");
+        }
     }
 }
