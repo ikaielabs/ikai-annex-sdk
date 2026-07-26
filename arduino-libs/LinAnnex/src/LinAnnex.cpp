@@ -1,70 +1,11 @@
 #include "LinAnnex.h"
 #include <Arduino.h>
 
-#if defined(ARDUINO_ARCH_AVR)
-#include <avr/interrupt.h>
-#endif
-
 // LIN Protocol constants
 #define LIN_SYNC_BYTE       0x55
 #define LIN_MAX_FRAME_ID    0x3F
 #define LIN_MAX_DATA_LEN    8
 #define LIN_MIN_TIMEOUT_MS  1
-
-// #if defined(ARDUINO_ARCH_AVR)
-// namespace {
-//     static volatile uint8_t g_lin_rx_buffer[64];
-//     static volatile uint8_t g_lin_rx_head = 0;
-//     static volatile uint8_t g_lin_rx_tail = 0;
-//     static volatile bool g_lin_rx_overflow = false;
-
-//     inline void linRxBufferClear() {
-//         g_lin_rx_head = 0;
-//         g_lin_rx_tail = 0;
-//         g_lin_rx_overflow = false;
-//     }
-
-//     inline uint8_t linRxBufferCount() {
-//         return (uint8_t)(g_lin_rx_head - g_lin_rx_tail);
-//     }
-
-//     inline void linRxBufferPush(uint8_t value) {
-//         uint8_t next_head = (uint8_t)(g_lin_rx_head + 1U);
-//         if (next_head >= sizeof(g_lin_rx_buffer)) {
-//             next_head = 0;
-//         }
-//         if (next_head == g_lin_rx_tail) {
-//             g_lin_rx_overflow = true;
-//             return;
-//         }
-//         g_lin_rx_buffer[g_lin_rx_head] = value;
-//         g_lin_rx_head = next_head;
-//     }
-
-//     inline uint8_t linRxBufferPop() {
-//         if (g_lin_rx_head == g_lin_rx_tail) {
-//             return 0;
-//         }
-//         uint8_t value = g_lin_rx_buffer[g_lin_rx_tail];
-//         g_lin_rx_tail = (uint8_t)(g_lin_rx_tail + 1U);
-//         if (g_lin_rx_tail >= sizeof(g_lin_rx_buffer)) {
-//             g_lin_rx_tail = 0;
-//         }
-//         return value;
-//     }
-// }
-
-// ISR(USART_RX_vect) {
-//     linRxBufferPush(UDR0);
-// }
-// #else
-// namespace {
-//     inline void linRxBufferClear() {}
-//     inline uint8_t linRxBufferCount() { return 0; }
-//     inline void linRxBufferPush(uint8_t) {}
-//     inline uint8_t linRxBufferPop() { return 0; }
-// }
-// #endif
 
 /**
  * @brief Constructor - Initialize LINAnnex object
@@ -206,6 +147,8 @@ void LINAnnex::detectBreak() {
         
         while(digitalRead(_rx_pin) == LOW);
 
+        // TODO: Actual bit time checking for exact break period. Currently not working
+        // Simple HIGH to LOW transition is checked.
         // uint32_t low_duration_us = (micros() - start);
         // if((low_duration_us - 100) >= break_us)
         _break_detected = true;
