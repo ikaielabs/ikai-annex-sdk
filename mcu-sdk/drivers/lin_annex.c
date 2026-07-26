@@ -13,6 +13,7 @@ struct annex_lin_dev {
     uint32_t last_request_id;
     uint8_t last_request_pid;   /* protected ID of the last header sent,
                                    needed for the enhanced checksum */
+    
 };
 
 static uint8_t lin_compute_protected_id(uint8_t id)
@@ -71,6 +72,17 @@ static annex_lin_status_t lin_send_break(annex_hal_uart_dev_t *uart,
     return LIN_OK;
 }
 
+static annex_lin_status_t lin_detect_break(annex_hal_uart_dev_t *uart, uint32_t timeout)
+{
+    if (!uart)
+        return LIN_ERR;
+
+    if (annex_hal_uart_wait_for_break(uart, timeout) != 0)
+        return LIN_ERR;
+
+    return LIN_OK;
+}
+
 static annex_lin_status_t lin_send_header(annex_lin_dev_t *dev, uint32_t id, uint32_t timeout)
 {
     if (!dev || id > 0x3FU)
@@ -90,73 +102,75 @@ static annex_lin_status_t lin_send_header(annex_lin_dev_t *dev, uint32_t id, uin
 
 static int lin_read_bytes_wait(annex_hal_uart_dev_t *uart, uint8_t *buf, uint32_t len, uint32_t timeout)
 {
-    if (!uart || !buf || len == 0)
-        return -1;
-    
-    if(annex_hal_uart_read_fifo_u8(uart, buf, len, timeout) == 0) {
+    if(annex_hal_uart_read_fifo_u8(uart, buf, len, timeout) != 0) {
         return -1;
     }
 
     return 0;
 }
 
-static annex_lin_status_t lin_read_header(annex_lin_dev_t *dev, uint32_t *id, uint32_t *dlc, uint32_t *flags, uint32_t timeout)
+static annex_lin_status_t lin_read_header(annex_lin_dev_t *dev, uint8_t *id, uint32_t *flags, uint32_t timeout)
 {
-    if (!dev || !id || !dlc || !flags)
+    if (!dev || !id || !flags)
         return LIN_ERR;
 
     uint8_t byte = 0;
-    while (1) {
-        int n = lin_read_bytes_wait(dev->uart_handle, &byte, 1, timeout);
-        if (n != 1)
-            return LIN_ERR;
+    uint32_t sync_timeout = 0xFF;
+    while(--sync_timeout) {
+      if(lin_read_bytes_wait(dev->uart_handle, &byte, 1, timeout) != 0)
+    	  return LIN_ERR;
 
-        if (byte == 0x55)
-            break;
+      if (byte != 0x55 && byte != 0U) {
+          (*flags) |= ANNEX_SYNCH_ERROR;
+    	  break;
+      }
+      if(byte == 0x55){
+    	/* Sync Received */
+    	break;
+      }
     }
 
     uint8_t pid = 0;
-    if (lin_read_bytes_wait(dev->uart_handle, &pid, 1, timeout) != 1)
+    if (lin_read_bytes_wait(dev->uart_handle, &pid, 1, timeout) != 0)
         return LIN_ERR;
 
     uint8_t raw_id = 0;
-    if (!lin_validate_protected_id(pid, &raw_id))
+    if (!lin_validate_protected_id(pid, &raw_id)){
+    	 *flags |= ANNEX_LIN_PARITY_ERROR;
         return LIN_ERR;
+    }
 
     dev->last_request_id  = raw_id;
     dev->last_request_pid = pid;
 
     *id    = raw_id;
-    *dlc   = 0;
-    *flags = ANNEX_LIN_NODATA;
+    *flags |= ANNEX_LIN_NODATA;
 
     return LIN_OK;
 }
 
-static annex_lin_status_t lin_read_response(annex_lin_dev_t *dev, uint32_t *id, void *msg, uint32_t *dlc, uint32_t *flags, uint32_t timeout)
+static annex_lin_status_t lin_read_response(annex_lin_dev_t *dev, uint8_t *id, uint8_t *msg, uint8_t dlc, uint32_t *flags, uint32_t timeout)
 {
-    if (!dev || !id || !msg || !dlc || !flags)
+    if (!dev || !id || !msg || !flags)
         return LIN_ERR;
 
     uint8_t buffer[9];
-    if(annex_hal_uart_read_fifo_u8(dev->uart_handle, buffer, *dlc, timeout) != 0) {
+    if(annex_hal_uart_read_fifo_u8(dev->uart_handle, buffer, (dlc+1), timeout) != 0) {
         return LIN_ERR;
     }
 
-    uint32_t data_len = *dlc;
-    if (data_len > 8)
-        data_len = 8;
+    *flags &= ~(ANNEX_LIN_NODATA);
 
-    uint8_t checksum = buffer[*dlc];
-    uint8_t expected = lin_compute_checksum(dev->last_request_pid, buffer, data_len, (dev->flags & ANNEX_LIN_ENHANCED_CHECKSUM) != 0);
+    uint8_t checksum = buffer[dlc];
+
+    uint8_t expected = lin_compute_checksum(dev->last_request_pid, buffer, dlc, (dev->flags & ANNEX_LIN_ENHANCED_CHECKSUM) != 0);
     if (checksum != expected) {
-        *flags = ANNEX_LIN_CSUM_ERROR;
+        *flags |= ANNEX_LIN_CSUM_ERROR;
         return LIN_ERR;
     }
 
-    memcpy(msg, buffer, data_len);
+    memcpy(msg, buffer, dlc);
     *id    = dev->last_request_id;
-    *dlc   = data_len;
     *flags = 0;
 
     return LIN_OK;
@@ -247,7 +261,7 @@ annex_lin_status_t annex_lin_stop(annex_lin_dev_t *dev)
     return LIN_OK;
 }
 
-annex_lin_status_t annex_lin_write_message(annex_lin_dev_t *dev, uint32_t id, void *msg, uint32_t dlc, uint32_t timeout)
+annex_lin_status_t annex_lin_write_message(annex_lin_dev_t *dev, uint8_t id, uint8_t *msg, uint32_t dlc, uint32_t timeout)
 {
     if (!dev)
         return LIN_NOT_INITIALIZED;
@@ -265,11 +279,10 @@ annex_lin_status_t annex_lin_write_message(annex_lin_dev_t *dev, uint32_t id, vo
         if (lin_send_header(dev, id, timeout) != LIN_OK)
             return LIN_ERR;
 
-        uint8_t *payload = (uint8_t *)msg;
-        if (annex_hal_uart_write_fifo_u8(dev->uart_handle, payload, dlc, timeout) != 0)
+        if (annex_hal_uart_write_fifo_u8(dev->uart_handle, msg, dlc, timeout) != 0)
             return LIN_ERR;
 
-        uint8_t checksum = lin_compute_checksum(dev->last_request_pid, payload, dlc, (dev->flags & ANNEX_LIN_ENHANCED_CHECKSUM) != 0);
+        uint8_t checksum = lin_compute_checksum(dev->last_request_pid, msg, dlc, (dev->flags & ANNEX_LIN_ENHANCED_CHECKSUM) != 0);
         if (annex_hal_uart_write_fifo_u8(dev->uart_handle, &checksum, 1, timeout) != 0)
             return LIN_ERR;
 
@@ -284,11 +297,10 @@ annex_lin_status_t annex_lin_write_message(annex_lin_dev_t *dev, uint32_t id, vo
         if (dlc == 0)
             return LIN_OK;
 
-        uint8_t *payload = (uint8_t *)msg;
-        if (annex_hal_uart_write_fifo_u8(dev->uart_handle, payload, dlc, timeout) != (int)dlc)
+        if (annex_hal_uart_write_fifo_u8(dev->uart_handle, msg, dlc, timeout) != (int)dlc)
             return LIN_ERR;
 
-        uint8_t checksum = lin_compute_checksum(dev->last_request_pid, payload, dlc, (dev->flags & ANNEX_LIN_ENHANCED_CHECKSUM) != 0);
+        uint8_t checksum = lin_compute_checksum(dev->last_request_pid, msg, dlc, (dev->flags & ANNEX_LIN_ENHANCED_CHECKSUM) != 0);
         if (annex_hal_uart_write_fifo_u8(dev->uart_handle, &checksum, 1, timeout) != 0)
             return LIN_ERR;
 
@@ -298,7 +310,7 @@ annex_lin_status_t annex_lin_write_message(annex_lin_dev_t *dev, uint32_t id, vo
     return LIN_ERR;
 }
 
-annex_lin_status_t annex_lin_request_message(annex_lin_dev_t *dev, uint32_t id, uint32_t timeout)
+annex_lin_status_t annex_lin_request_message(annex_lin_dev_t *dev, uint8_t id, uint32_t timeout)
 {
     if (!dev)
         return LIN_NOT_INITIALIZED;
@@ -319,25 +331,36 @@ annex_lin_status_t annex_lin_request_message(annex_lin_dev_t *dev, uint32_t id, 
     return LIN_OK;
 }
 
-annex_lin_status_t annex_lin_read_message(annex_lin_dev_t *dev, uint32_t *id, void *msg, uint32_t *dlc, uint32_t *flags)
+annex_lin_status_t annex_lin_read_message(annex_lin_dev_t *dev, uint8_t *id, uint8_t *msg, uint8_t dlc, uint32_t *flags)
 {
     return annex_lin_read_message_wait(dev, id, msg, dlc, flags, 0);
 }
 
-annex_lin_status_t annex_lin_read_message_wait(annex_lin_dev_t *dev, uint32_t *id, void *msg, uint32_t *dlc, uint32_t *flags, uint32_t timeout)
+annex_lin_status_t annex_lin_read_message_wait(annex_lin_dev_t *dev, uint8_t *id, uint8_t *msg, uint8_t dlc, uint32_t *flags, uint32_t timeout)
 {
     if (!dev)
         return LIN_NOT_INITIALIZED;
 
     if (!id || !dlc || !flags)
         return LIN_ERR;
+    
+    if (dlc > 8)
+        return LIN_ERR;
 
     if (dev->flags & ANNEX_LIN_MASTER)
         return lin_read_response(dev, id, msg, dlc, flags, timeout);
-    else /* SLAVE */
-        return lin_read_header(dev, id, dlc, flags, timeout);
+    else { /* SLAVE */
+    	if(lin_detect_break(dev->uart_handle, timeout) != LIN_OK)
+            return LIN_ERR;
 
-    return LIN_ERR;
+        if(lin_read_header(dev, id, flags, timeout) != LIN_OK)
+            return LIN_ERR;
+
+        if(lin_read_response(dev, id, msg, dlc, flags, timeout) != LIN_OK)
+            return LIN_ERR;
+
+        return LIN_OK;
+    }
 }
 
 

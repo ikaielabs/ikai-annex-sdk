@@ -1,4 +1,4 @@
-# LIN Annex Board LIN Master Sample Application on STM32F446RE-Nucleo
+# LIN Annex Board LIN Slave Sample Application on STM32F446RE-Nucleo
 
 
 ## LIN Annex Connections

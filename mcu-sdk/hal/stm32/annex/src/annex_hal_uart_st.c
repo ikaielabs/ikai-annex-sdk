@@ -261,6 +261,36 @@ int annex_hal_uart_send_break(annex_hal_uart_dev_t *dev)
     return (timeout != 0U) ? 0 : -1;
 }
 
+int annex_hal_uart_wait_for_break(annex_hal_uart_dev_t *dev, uint32_t timeout_ms)
+{
+    if (dev == NULL || dev->hal_handle.Instance == NULL) {
+        return -1;
+    }
+
+    /* Must be in LIN mode for LBD to be meaningful */
+    if (!dev->lin_mode) {
+        return -1;
+    }
+
+    uint32_t start = HAL_GetTick();
+
+    /* Wait until the LBD flag is set or timeout */
+    while (!(__HAL_UART_GET_FLAG(&dev->hal_handle, UART_FLAG_LBD))) {
+        if (timeout_ms != HAL_MAX_DELAY) {
+            if ((HAL_GetTick() - start) >= timeout_ms) {
+                return -1; /* timeout */
+            }
+        }
+        /* small NOP to avoid tight busy-wait collapsing optimizations */
+        __asm volatile ("nop");
+    }
+
+    /* Clear the LBD flag before returning to caller */
+    __HAL_UART_CLEAR_FLAG(&dev->hal_handle, UART_FLAG_LBD);
+
+    return 0;
+}
+
 void annex_hal_uart_enable_irq(annex_hal_uart_dev_t *dev, uint32_t irqs)
 {
     if (dev == NULL) {
@@ -277,6 +307,9 @@ void annex_hal_uart_enable_irq(annex_hal_uart_dev_t *dev, uint32_t irqs)
     }
     if (irqs & (ANNEX_HAL_UART_IRQ_RX_OVERRUN | ANNEX_HAL_UART_IRQ_FRAME_ERR)) {
         __HAL_UART_ENABLE_IT(&dev->hal_handle, UART_IT_ERR);
+    }
+    if (irqs & ANNEX_HAL_UART_IRQ_BREAK_DET) {
+        __HAL_UART_ENABLE_IT(&dev->hal_handle, UART_IT_LBD);
     }
 }
 
@@ -297,6 +330,9 @@ void annex_hal_uart_disable_irq(annex_hal_uart_dev_t *dev, uint32_t irqs)
     if ((irqs & (ANNEX_HAL_UART_IRQ_RX_OVERRUN | ANNEX_HAL_UART_IRQ_FRAME_ERR)) &&
         !(dev->irq_mask & (ANNEX_HAL_UART_IRQ_RX_OVERRUN | ANNEX_HAL_UART_IRQ_FRAME_ERR))) {
         __HAL_UART_DISABLE_IT(&dev->hal_handle, UART_IT_ERR);
+    }
+    if ((irqs & ANNEX_HAL_UART_IRQ_BREAK_DET) && !(dev->irq_mask & ANNEX_HAL_UART_IRQ_BREAK_DET)) {
+        __HAL_UART_DISABLE_IT(&dev->hal_handle, UART_IT_LBD);
     }
 }
 
@@ -321,6 +357,9 @@ uint32_t annex_hal_uart_get_irq_status(annex_hal_uart_dev_t *dev)
     if ((READ_BIT(usart->SR, USART_SR_FE) != 0U)) {
         status |= ANNEX_HAL_UART_IRQ_FRAME_ERR;
     }
+    if ((READ_BIT(usart->SR, USART_SR_LBD) != 0U)) {
+        status |= ANNEX_HAL_UART_IRQ_BREAK_DET;
+    }
 
     dev->irq_status = status;
     return status & dev->irq_mask;
@@ -333,4 +372,7 @@ void annex_hal_uart_clear_irq(annex_hal_uart_dev_t *dev, uint32_t irqs)
     }
 
     dev->irq_status &= ~irqs;
+    if (irqs & ANNEX_HAL_UART_IRQ_BREAK_DET) {
+        __HAL_UART_CLEAR_FLAG(&dev->hal_handle, UART_FLAG_LBD);
+    }
 }

@@ -12,6 +12,8 @@ extern "C" {
 #define ANNEX_HAL_UART_IRQ_TX_EMPTY   (1U << 1)
 #define ANNEX_HAL_UART_IRQ_RX_OVERRUN (1U << 2)
 #define ANNEX_HAL_UART_IRQ_FRAME_ERR  (1U << 3)
+/* LIN break detection (hardware LBD) */
+#define ANNEX_HAL_UART_IRQ_BREAK_DET  (1U << 4)
 
 typedef struct annex_hal_uart_dev annex_hal_uart_dev_t;
 
@@ -54,6 +56,15 @@ int annex_hal_uart_lin_init(annex_hal_uart_dev_t *dev, uint8_t break_length_bits
 
 int annex_hal_uart_set_lin_mode(annex_hal_uart_dev_t *dev, bool enable);
 int annex_hal_uart_send_break(annex_hal_uart_dev_t *dev);
+/*
+ * Blocking wait for LIN break detection. Waits until the hardware LIN
+ * Break Detection flag (LBD) is set or timeout expires.
+ *
+ * timeout_ms: number of milliseconds to wait. Use `HAL_MAX_DELAY` for
+ * an infinite wait.
+ * Returns 0 on success (break detected), -1 on error or timeout.
+ */
+int annex_hal_uart_wait_for_break(annex_hal_uart_dev_t *dev, uint32_t timeout_ms);
 void annex_hal_uart_enable_irq(annex_hal_uart_dev_t *dev, uint32_t irqs);
 void annex_hal_uart_disable_irq(annex_hal_uart_dev_t *dev, uint32_t irqs);
 uint32_t annex_hal_uart_get_irq_status(annex_hal_uart_dev_t *dev);

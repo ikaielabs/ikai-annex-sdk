@@ -47,10 +47,10 @@ annex_lin_dev_t *annex_lin_open (const annex_lin_hw_desc_t *hw);
 void annex_lin_close(annex_lin_dev_t *dev);
 annex_lin_status_t annex_lin_start(annex_lin_dev_t *dev);
 annex_lin_status_t annex_lin_config(annex_lin_dev_t *dev, annex_lin_config_t *cfg);
-annex_lin_status_t annex_lin_write_message(annex_lin_dev_t *dev, uint32_t id, void *msg, uint32_t dlc, uint32_t timeout);
-annex_lin_status_t annex_lin_request_message(annex_lin_dev_t *dev, uint32_t id, uint32_t timeout);
-annex_lin_status_t annex_lin_read_message(annex_lin_dev_t *dev, uint32_t *id, void *msg, uint32_t *dlc, uint32_t *flags);
-annex_lin_status_t annex_lin_read_message_wait(annex_lin_dev_t *dev, uint32_t *id, void *msg, uint32_t *dlc, uint32_t *flags, uint32_t timeout);
+annex_lin_status_t annex_lin_write_message(annex_lin_dev_t *dev, uint8_t id, uint8_t *msg, uint32_t dlc, uint32_t timeout);
+annex_lin_status_t annex_lin_request_message(annex_lin_dev_t *dev, uint8_t id, uint32_t timeout);
+annex_lin_status_t annex_lin_read_message(annex_lin_dev_t *dev, uint8_t *id, uint8_t *msg, uint8_t dlc, uint32_t *flags);
+annex_lin_status_t annex_lin_read_message_wait(annex_lin_dev_t *dev, uint8_t *id, uint8_t *msg, uint8_t dlc, uint32_t *flags, uint32_t timeout);
 
 #ifdef __cplusplus
 }
