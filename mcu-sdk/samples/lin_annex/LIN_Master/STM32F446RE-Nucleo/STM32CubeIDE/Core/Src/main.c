@@ -42,7 +42,8 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 
-#define TX_LENGTH 8
+#define TX_LENGTH 8U
+#define MSG_COMMAND_ID 0x17U
 
 /* USER CODE END PM */
 
@@ -68,7 +69,8 @@ static void MX_USART3_UART_Init(void);
 static annex_lin_dev_t *lin_handle;
 static annex_hal_uart_dev_t *uart2;
 
-static char tx_data[TX_LENGTH] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+static uint8_t tx_data[TX_LENGTH] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+static uint8_t id = MSG_COMMAND_ID;
 /* USER CODE END 0 */
 
 /**
@@ -130,26 +132,19 @@ int main(void)
 
   HAL_GPIO_WritePin(LIN_EN_GPIO_Port, LIN_EN_Pin, GPIO_PIN_SET);
 
-  printf("LIN Commander Start\r\n");
+  printf("LIN Master Start\r\n");
 
   if(annex_lin_start(lin_handle) != LIN_OK)
       return -1;
 
-
-  if(annex_lin_write_message(lin_handle, 0x17U, tx_data, TX_LENGTH, 0xFFFFFF) != LIN_OK) {
-	  printf("Lin write message failed");
-	  return -1;
+  printf("Tx 0x%x {", id);
+  if(annex_lin_write_message(lin_handle, id, tx_data, TX_LENGTH, 0xFFFFFF) == LIN_OK) {
+    for (uint8_t i = 0; i < TX_LENGTH; i++) {
+	  printf(" 0x%x",tx_data[i]);
+	}
+	printf(" }");
   }
-
-  printf("Sent Data: {");
-  for (int i = 0; i < TX_LENGTH; i++) {
-      printf("0x%x",tx_data[i]); // Print the number without starting a new line
-      if (i < TX_LENGTH - 1) {
-          printf(", ");
-      }
-  }
-  printf("}\r\nLin write message Success \r\n");
-
+  printf(" br: %lu\r\n", cfg.lin_baudrate);
   /* USER CODE END 2 */
 
   /* Infinite loop */
