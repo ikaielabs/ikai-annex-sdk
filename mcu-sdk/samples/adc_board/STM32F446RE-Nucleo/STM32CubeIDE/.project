@@ -50,11 +50,10 @@
 			<type>2</type>
 			<locationURI>PARENT-4-PROJECT_LOC/hal/spi</locationURI>
 		</link>
+		<link>
+			<name>gpio/inx_hal_gpio_stm32.c</name>
+			<type>1</type>
+			<locationURI>PARENT-4-PROJECT_LOC/hal/gpio/inx_hal_gpio_stm32.c</locationURI>
+		</link>
 	</linkedResources>
-	<variableList>
-		<variable>
-			<name>PROJECT_DIR</name>
-			<value>$%7BIKAINEX_ROOT%7D</value>
-		</variable>
-	</variableList>
 </projectDescription>
